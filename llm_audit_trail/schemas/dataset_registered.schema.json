@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DatasetRegisteredDetails",
+  "type": "object",
+  "required": [
+    "version",
+    "source",
+    "rows",
+    "content_hash",
+    "preprocessing"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "license": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "datasheet_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "content_hash": {
+      "type": "string"
+    },
+    "preprocessing": {
+      "type": "object"
+    },
+    "pii_residual_risk": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

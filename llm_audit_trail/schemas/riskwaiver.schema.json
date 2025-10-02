@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RiskWaiverEventDetails",
+  "type": "object",
+  "required": [
+    "decision",
+    "rationale",
+    "owner",
+    "waived_controls"
+  ],
+  "properties": {
+    "decision": {
+      "const": "waived"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 3
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "waived_controls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "time_bound_until": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

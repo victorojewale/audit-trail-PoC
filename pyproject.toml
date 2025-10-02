@@ -1,0 +1,21 @@
+
+[project]
+name = "llm-audit-trail"
+version = "0.1.0"
+description = "Tamper-evident audit trails for LLM lifecycles: training, deployment, and monitoring."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "VO"}]
+dependencies = []
+
+[project.optional-dependencies]
+fastapi = ["fastapi", "starlette"]
+hf = ["transformers>=4.30.0"]
+wandb = ["wandb>=0.15.0"]
+
+[project.urls]
+Homepage = "https://example.com/llm-audit-trail"
+
+[tool.setuptools]
+packages = ["llm_audit_trail"]

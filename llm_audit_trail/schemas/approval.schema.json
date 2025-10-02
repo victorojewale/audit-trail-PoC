@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApprovalEventDetails",
+  "type": "object",
+  "required": [
+    "decision",
+    "rationale",
+    "owner",
+    "constraints",
+    "references"
+  ],
+  "properties": {
+    "decision": {
+      "const": "approved"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 3
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "constraints": {
+      "type": "object"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
