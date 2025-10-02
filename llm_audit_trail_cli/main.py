@@ -1,31 +1,12 @@
-
-import argparse, json, os, sys, tempfile, subprocess
-from typing import Dict, Any, List, Optional
+import argparse, json, os, yaml
+from typing import Any, Optional
 from llm_audit_trail import AuditLogger
+from llm_audit_trail.config import load_config
+from llm_audit_trail.providers import load_scope_providers
 from llm_audit_trail.decisions import record_approval, record_waiver, record_attestation
 
-DEFAULT_LOG = os.environ.get("AUDIT_LOG_PATH", "audit_trail.jsonl")
-
-def _load_recent_ids(path: str = DEFAULT_LOG, limit: int = 50):
-    models, datasets, deployments = set(), set(), set()
-    if not os.path.exists(path):
-        return [], [], []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in list(f)[-limit:]:
-            try:
-                rec = json.loads(line)
-            except Exception:
-                continue
-            if rec.get("model_id"):
-                models.add(rec["model_id"])
-            if rec.get("dataset_id"):
-                datasets.add(rec["dataset_id"])
-            if rec.get("deployment_id"):
-                deployments.add(rec["deployment_id"])
-    return sorted(models), sorted(datasets), sorted(deployments)
-
 def _prompt(msg: str, default: Optional[str] = None) -> str:
-    if default:
+    if default is not None and default != "":
         val = input(f"{msg} [{default}]: ").strip()
         return val or default
     return input(f"{msg}: ").strip()
@@ -41,7 +22,7 @@ def _prompt_json(msg: str, default_obj: Any) -> Any:
         print(f"Invalid JSON, using default. Error: {e}")
         return default_obj
 
-def _choose_from_list(title: str, options: List[str]) -> Optional[str]:
+def _choose_from_list(title: str, options):
     if not options:
         return None
     print(f"{title}:")
@@ -59,125 +40,98 @@ def _choose_from_list(title: str, options: List[str]) -> Optional[str]:
     print("Invalid selection; skipping.")
     return None
 
-def interactive_approval(log: AuditLogger):
-    models, datasets, deployments = _load_recent_ids()
-    owner = _prompt("Owner (person or committee)", os.environ.get("AUDIT_OWNER"))
-    rationale = _prompt("Rationale", "Meets acceptance criteria")
-    model_id = _prompt("Model ID", _choose_from_list("Recent model_ids", models) or "")
-    dataset_id = _prompt("Dataset ID", _choose_from_list("Recent dataset_ids", datasets) or "")
-    deployment_id = _prompt("Deployment ID", _choose_from_list("Recent deployment_ids", deployments) or "")
-    constraints = _prompt_json("Constraints", {"rollout":"10% for 48h"})
-    references = _prompt_json("References", [])
-    ev = record_approval(
-        log, owner=owner, rationale=rationale,
-        scope={"model_id": model_id or None, "dataset_id": dataset_id or None, "deployment_id": deployment_id or None},
-        constraints=constraints, references=references
-    )
-    print(json.dumps(ev, indent=2))
+def load_decision_spec(event_type: str, cfg: dict) -> dict:
+    for p in [cfg.get("decisions_path"), ".llm-audit/decisions.yaml",
+              os.path.expanduser("~/.llm-audit/decisions.yaml"),
+              "/etc/llm-audit/decisions.yaml"]:
+        if p and os.path.exists(p):
+            spec = yaml.safe_load(open(p, "r", encoding="utf-8")) or {}
+            if event_type in spec:
+                return spec[event_type]
+    return {"fields": {}}
 
-def interactive_waiver(log: AuditLogger):
-    models, datasets, deployments = _load_recent_ids()
-    owner = _prompt("Owner", os.environ.get("AUDIT_OWNER"))
-    rationale = _prompt("Rationale", "Pilot exception")
-    model_id = _prompt("Model ID", _choose_from_list("Recent model_ids", models) or "")
-    dataset_id = _prompt("Dataset ID", _choose_from_list("Recent dataset_ids", datasets) or "")
-    deployment_id = _prompt("Deployment ID", _choose_from_list("Recent deployment_ids", deployments) or "")
-    waived_controls = _prompt_json("Waived controls", ["SLO:latency_p95"])
-    time_bound_until = _prompt("Time bound until (RFC3339) or blank", "")
-    references = _prompt_json("References", [])
-    ev = record_waiver(
-        log, owner=owner, rationale=rationale,
-        scope={"model_id": model_id or None, "dataset_id": dataset_id or None, "deployment_id": deployment_id or None},
-        waived_controls=waived_controls, time_bound_until=(time_bound_until or None),
-        references=references
-    )
-    print(json.dumps(ev, indent=2))
+def interactive_decision(event_type: str, cfg: dict):
+    providers = load_scope_providers(cfg)
+    merged = {"models": set(), "datasets": set(), "deployments": set()}
+    for pr in providers:
+        r = pr.recent()
+        for k in merged:
+            merged[k].update(r.get(k, []))
+    for k in merged:
+        merged[k] = sorted(merged[k])
 
-def interactive_attestation(log: AuditLogger):
-    models, datasets, deployments = _load_recent_ids()
-    owner = _prompt("Owner", os.environ.get("AUDIT_OWNER") or "Compliance")
-    statement = _prompt("Statement", "Data licensed and within scope")
-    model_id = _prompt("Model ID", _choose_from_list("Recent model_ids", models) or "")
-    dataset_id = _prompt("Dataset ID", _choose_from_list("Recent dataset_ids", datasets) or "")
-    deployment_id = _prompt("Deployment ID", _choose_from_list("Recent deployment_ids", deployments) or "")
-    references = _prompt_json("References", [])
-    ev = record_attestation(
-        log, owner=owner, statement=statement,
-        scope={"model_id": model_id or None, "dataset_id": dataset_id or None, "deployment_id": deployment_id or None},
-        references=references
-    )
-    print(json.dumps(ev, indent=2))
+    spec = load_decision_spec(event_type, cfg)
+    fields = spec.get("fields", {})
+    values = {}
+
+    def field_default(name, meta):
+        if name == "owner":
+            return cfg.get("owner")
+        return meta.get("default")
+
+    for name, meta in fields.items():
+        prompt = meta.get("prompt", name)
+        typ = meta.get("type", "str")
+        default = field_default(name, meta)
+
+        if name in ("model_id","dataset_id","deployment_id"):
+            opts = merged["models"] if name=="model_id" else merged["datasets"] if name=="dataset_id" else merged["deployments"]
+            pre = _choose_from_list(f"Recent {name}s", opts) or ""
+            ans = _prompt(prompt, pre or default or "")
+        elif typ == "json":
+            ans = _prompt_json(prompt, default if default is not None else {})
+        else:
+            ans = _prompt(prompt, default)
+        values[name] = ans
+
+    log = AuditLogger(cfg.get("log_path", "audit_trail.jsonl"))
+    scope = {k: values.get(k) or None for k in ("model_id","dataset_id","deployment_id")}
+
+    if event_type == "Approval":
+        return record_approval(
+            log,
+            owner=values.get("owner") or "Unknown",
+            rationale=values.get("rationale") or "no rationale provided",
+            scope=scope,
+            constraints=values.get("constraints") or {},
+            references=values.get("references") or [],
+        )
+    if event_type == "RiskWaiver":
+        return record_waiver(
+            log,
+            owner=values.get("owner") or "Unknown",
+            rationale=values.get("rationale") or "no rationale provided",
+            scope=scope,
+            waived_controls=values.get("waived_controls") or [],
+            time_bound_until=values.get("time_bound_until") or None,
+            references=values.get("references") or [],
+        )
+    if event_type == "Attestation":
+        return record_attestation(
+            log,
+            owner=values.get("owner") or "Unknown",
+            statement=values.get("statement") or "no statement provided",
+            scope=scope,
+            references=values.get("references") or [],
+        )
+    raise SystemExit(f"Unsupported event type: {event_type}")
 
 def main():
     p = argparse.ArgumentParser(prog="llm-audit")
+    p.add_argument("--config", help="Path to config.yaml")
     sub = p.add_subparsers(dest="cmd", required=True)
-
-    a = sub.add_parser("approve", help="Record an approval decision")
-    a.add_argument("--owner")
-    a.add_argument("--rationale")
-    a.add_argument("--model-id")
-    a.add_argument("--dataset-id")
-    a.add_argument("--deployment-id")
-    a.add_argument("--constraints", help="JSON dict")
-    a.add_argument("--references", help="JSON list")
-    a.add_argument("--interactive", action="store_true")
-
-    w = sub.add_parser("waive", help="Record a risk waiver decision")
-    w.add_argument("--owner")
-    w.add_argument("--rationale")
-    w.add_argument("--waived-controls", help="JSON list")
-    w.add_argument("--time-bound-until")
-    w.add_argument("--model-id")
-    w.add_argument("--dataset-id")
-    w.add_argument("--deployment-id")
-    w.add_argument("--references", help="JSON list")
-    w.add_argument("--interactive", action="store_true")
-
-    t = sub.add_parser("attest", help="Record an attestation")
-    t.add_argument("--owner")
-    t.add_argument("--statement")
-    t.add_argument("--model-id")
-    t.add_argument("--dataset-id")
-    t.add_argument("--deployment-id")
-    t.add_argument("--references", help="JSON list")
-    t.add_argument("--interactive", action="store_true")
-
+    for cmd in ("approve", "waive", "attest"):
+        sub.add_parser(cmd, help=f"Interactive {cmd}").add_argument("--interactive", action="store_true")
     args = p.parse_args()
-    log = AuditLogger()
+    cfg = load_config(args.config)
 
     if args.cmd == "approve":
-        if args.interactive:
-            return interactive_approval(log)
-        ev = record_approval(
-            log,
-            owner=args.owner or os.environ.get("AUDIT_OWNER") or "Unknown",
-            rationale=args.rationale or "no rationale provided",
-            scope={"model_id": args.model_id, "dataset_id": args.dataset_id, "deployment_id": args.deployment_id},
-            constraints=json.loads(args.constraints) if args.constraints else {},
-            references=json.loads(args.references) if args.references else [],
-        )
+        ev = interactive_decision("Approval", cfg)
     elif args.cmd == "waive":
-        if args.interactive:
-            return interactive_waiver(log)
-        ev = record_waiver(
-            log,
-            owner=args.owner or os.environ.get("AUDIT_OWNER") or "Unknown",
-            rationale=args.rationale or "no rationale provided",
-            scope={"model_id": args.model_id, "dataset_id": args.dataset_id, "deployment_id": args.deployment_id},
-            waived_controls=json.loads(args.waived_controls) if args.waived_controls else [],
-            time_bound_until=args.time_bound_until,
-            references=json.loads(args.references) if args.references else [],
-        )
+        ev = interactive_decision("RiskWaiver", cfg)
     else:
-        if args.interactive:
-            return interactive_attestation(log)
-        ev = record_attestation(
-            log,
-            owner=args.owner or os.environ.get("AUDIT_OWNER") or "Unknown",
-            statement=args.statement or "no statement provided",
-            scope={"model_id": args.model_id, "dataset_id": args.dataset_id, "deployment_id": args.deployment_id},
-            references=json.loads(args.references) if args.references else [],
-        )
+        ev = interactive_decision("Attestation", cfg)
+
     print(json.dumps(ev, indent=2))
 
 if __name__ == "__main__":

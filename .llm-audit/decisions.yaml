@@ -1,0 +1,29 @@
+Approval:
+  fields:
+    owner:        { prompt: "Owner (person or committee)", required: true }
+    rationale:    { prompt: "Rationale", required: true, default: "Meets acceptance criteria" }
+    model_id:     { prompt: "Model ID" }
+    dataset_id:   { prompt: "Dataset ID" }
+    deployment_id:{ prompt: "Deployment ID" }
+    constraints:  { prompt: "Constraints (JSON)", type: json, default: {"rollout":"10% for 48h"} }
+    references:   { prompt: "References (JSON)", type: json, default: [] }
+
+RiskWaiver:
+  fields:
+    owner:        { prompt: "Owner", required: true }
+    rationale:    { prompt: "Rationale", required: true, default: "Pilot exception" }
+    model_id:     { prompt: "Model ID" }
+    dataset_id:   { prompt: "Dataset ID" }
+    deployment_id:{ prompt: "Deployment ID" }
+    waived_controls: { prompt: "Waived controls (JSON list)", type: json, default: ["SLO:latency_p95"] }
+    time_bound_until: { prompt: "Time bound until (RFC3339)", default: "" }
+    references:   { prompt: "References (JSON)", type: json, default: [] }
+
+Attestation:
+  fields:
+    owner:        { prompt: "Owner", required: true, default: "Compliance" }
+    statement:    { prompt: "Statement", required: true, default: "Data licensed and within scope" }
+    model_id:     { prompt: "Model ID" }
+    dataset_id:   { prompt: "Dataset ID" }
+    deployment_id:{ prompt: "Deployment ID" }
+    references:   { prompt: "References (JSON)", type: json, default: [] }

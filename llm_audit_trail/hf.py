@@ -1,14 +1,14 @@
-
 from __future__ import annotations
-from transformers import TrainerCallback
 from typing import Optional
+from transformers import TrainerCallback
 from .core import AuditLogger
 
 class AuditTrailCallback(TrainerCallback):
     """Hugging Face Trainer callback that auto-logs training lifecycle."""
-    def __init__(self, logger: AuditLogger, model_id: Optional[str] = None):
+    def __init__(self, logger: AuditLogger, model_id: Optional[str] = None, dataset_id: Optional[str] = None):
         self.log = logger
         self.model_id = model_id
+        self.dataset_id = dataset_id
 
     def on_train_begin(self, args, state, control, **kwargs):
         self.log.emit(
@@ -23,6 +23,7 @@ class AuditTrailCallback(TrainerCallback):
                 "fp16": getattr(args, "fp16", False),
             },
             model_id=self.model_id,
+            dataset_id=self.dataset_id,
             system="hf_trainer",
         )
 
@@ -38,6 +39,7 @@ class AuditTrailCallback(TrainerCallback):
                 "loss": last.get("loss"),
             },
             model_id=self.model_id,
+            dataset_id=self.dataset_id,
             system="hf_trainer",
         )
 
@@ -48,14 +50,17 @@ class AuditTrailCallback(TrainerCallback):
             "Evaluation",
             details=det,
             model_id=self.model_id,
+            dataset_id=self.dataset_id,
             system="hf_trainer",
         )
 
     def on_save(self, args, state, control, **kwargs):
         self.log.emit(
             "Checkpoint",
-            details={"global_step": getattr(state, "global_step", None), "output_dir": getattr(args, "output_dir", None)},
+            details={"global_step": getattr(state, "global_step", None),
+                     "output_dir": getattr(args, "output_dir", None)},
             model_id=self.model_id,
+            dataset_id=self.dataset_id,
             system="hf_trainer",
         )
 
@@ -68,5 +73,15 @@ class AuditTrailCallback(TrainerCallback):
                 "best_model_checkpoint": getattr(state, "best_model_checkpoint", None),
             },
             model_id=self.model_id,
+            dataset_id=self.dataset_id,
             system="hf_trainer",
         )
+
+def hf_audit_callback(
+    model_id: Optional[str] = None,
+    dataset_id: Optional[str] = None,
+    logger: Optional[AuditLogger] = None
+) -> AuditTrailCallback:
+    """Convenience factory so users can pass this straight to Trainer(callbacks=[...])."""
+    logger = logger or AuditLogger()
+    return AuditTrailCallback(logger=logger, model_id=model_id, dataset_id=dataset_id)
