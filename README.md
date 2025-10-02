@@ -60,36 +60,10 @@ def infer(prompt: str):
 ```
 
 ## Verify integrity
-```bash
-python -c "from llm_audit_trail import verify_log; print(verify_log('audit_trail.jsonl'))"
-```
+
 
 
 ## Decisions: three human-authored event types
-
-Python helpers:
-```python
-from llm_audit_trail.decisions import record_approval, record_waiver, record_attestation
-from llm_audit_trail import AuditLogger
-log = AuditLogger()
-
-record_approval(log, owner="Risk Board", rationale="Meets bias thresholds",
-                scope={"model_id":"llama2-ft-v1","deployment_id":"prod-a"},
-                constraints={"languages":["en"]}, references=["JIRA-1234"])
-
-record_waiver(log, owner="CTO", rationale="Pilot latency exception",
-              scope={"model_id":"llama2-ft-v1"}, waived_controls=["SLO:latency_p95"], time_bound_until="2025-12-31")
-
-record_attestation(log, owner="Compliance", statement="Training data licensed for intended use",
-                   scope={"dataset_id":"cust-support-2025-09"}, references=["datasheet:v1"])
-```
-
-CLI:
-```bash
-python -m llm_audit_trail_cli.main approve --owner "Risk Board" --rationale "OK" --model-id llama2-ft-v1 --deployment-id prod-a --constraints '{"languages":["en"]}'
-python -m llm_audit_trail_cli.main waive --owner "CTO" --rationale "pilot" --waived-controls '["SLO:latency_p95"]' --model-id llama2-ft-v1
-python -m llm_audit_trail_cli.main attest --owner "Compliance" --statement "Data licensed" --dataset-id cust-support-2025-09
-```
 
 
 ## Interactive human-in-the-loop CLI
@@ -111,34 +85,3 @@ Tips:
 
 ## Dataset provenance helpers
 
-```python
-from llm_audit_trail import AuditLogger
-from llm_audit_trail.datasets import register_dataset, dataset_attestation
-
-log = AuditLogger()
-register_dataset(
-  log,
-  dataset_id="cust-support-2025-09",
-  version="2025-09-30",
-  source="s3://org-datalake/datasets/cust-support/2025-09/",
-  rows=50000,
-  license="internal",
-  datasheet_url="https://example.org/datasheets/cust-support-2025-09",
-  content_hash="sha256:<hash-of-frozen-snapshot>",
-  preprocessing={"pii_scrub":"v1.3","lang":["en"],"dedupe":True},
-  owner="Data Eng",
-)
-
-dataset_attestation(
-  log,
-  dataset_id="cust-support-2025-09",
-  statement="Data licensed for intended use; no special-category personal data retained after PII scrub",
-  owner="Compliance",
-  references=["datasheet:v1"],
-)
-```
-
-Run the end-to-end stub:
-```bash
-python examples/register_and_train_stub.py
-```
