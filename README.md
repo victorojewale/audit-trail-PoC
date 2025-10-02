@@ -1,74 +1,68 @@
-
 # llm-audit-trail
 
-A lightweight library to emit **tamper-evident** audit events for LLM lifecycles and to **verify** integrity later.
+**llm-audit-trail** is a lightweight library to emit **tamper-evident audit events** for LLM lifecycles and to **verify** integrity later.  
+It supports logging training, evaluation, deployment, dataset provenance, and human-in-the-loop governance decisions.
 
+---
+
+## Features
+- **Event logging** – record lifecycle events with cryptographic chaining.  
+- **Verification** – detect tampering or missing entries.  
+- **Integrations** – Hugging Face `Trainer` callback, FastAPI middleware.  
+- **Dataset provenance** – register datasets with metadata and checksums.  
+- **Human-in-the-loop** – approvals, waivers, attestations via CLI.  
+
+---
 ## Install
 ```bash
-pip install ./llm-audit-trail-lib   # local path install
-# or, once published: pip install llm-audit-trail
+git clone https://github.com/victorojewale/audit-trail-PoC.git
+cd llm-audit-trail
+pip install -e .
+
 ```
 
 ## Quick start
 ```python
 from llm_audit_trail import AuditLogger, verify_log
 
-log = AuditLogger(path="audit_trail.jsonl", system="demo", actor="researcher")
+log = AuditLogger(path="audit_trail.jsonl", system="demo")
 
-log.emit("FineTuneStart", {"learning_rate":1e-5, "epochs":1}, model_id="distilbert-imdb-v1")
-log.emit("Evaluation", {"accuracy":0.81, "f1":0.82}, model_id="distilbert-imdb-v1")
-ok, info = verify_log("audit_trail.jsonl")
-print("OK" if ok else info)
+log.emit("FineTuneStart", {"lr":1e-5}, model_id="demo-imdb-v1")
+log.emit("Evaluation", {"accuracy":0.81}, model_id="demo-imdb-v1")
+
+ok, report = verify_log("audit_trail.jsonl")
+print("Ledger OK:", ok)
 ```
 
-## Hugging Face integration (optional)
-```bash
-pip install llm-audit-trail[hf]
-```
+---
+
+## Hugging Face integration
 ```python
-from transformers import Trainer, TrainingArguments, AutoTokenizer, AutoModelForSequenceClassification
-from datasets import load_dataset
-from llm_audit_trail import AuditLogger
-from llm_audit_trail.hf import AuditTrailCallback
+from llm_audit_trail import hf_audit_callback
+from transformers import Trainer
 
-log = AuditLogger(system="hf_demo")
-cb = AuditTrailCallback(logger=log, model_id="distilbert-base-uncased")
-
-# build model/datasets as usual, then:
-trainer = Trainer(model=model, args=TrainingArguments(output_dir="out", num_train_epochs=1, report_to=[]),
-                  train_dataset=train_ds, eval_dataset=eval_ds, callbacks=[cb])
+cb = hf_audit_callback(model_id="demo-imdb-v1")
+trainer = Trainer(..., callbacks=[cb])
 trainer.train()
-trainer.evaluate()
 ```
 
-## FastAPI middleware (optional)
-```bash
-pip install llm-audit-trail[fastapi] uvicorn
-```
+---
+
+## FastAPI integration
 ```python
 from fastapi import FastAPI
-from llm_audit_trail import AuditLogger
-from llm_audit_trail.fastapi import AuditMiddleware
+from llm_audit_trail import AuditLogger, AuditMiddleware
 
 app = FastAPI()
 log = AuditLogger(system="api")
-app.add_middleware(AuditMiddleware, logger=log, redact_previews=True)
-
-@app.post("/infer")
-def infer(prompt: str):
-    return {"output": prompt[::-1]}
+app.add_middleware(AuditMiddleware, logger=log, model_id="demo-imdb-v1")
 ```
 
-## Verify integrity
+---
 
+## Human-in-the-loop decisions (CLI)
 
-
-## Decisions: three human-authored event types
-
-
-## Interactive human-in-the-loop CLI
-
-You can record approvals, waivers, and attestations without flags. The CLI will prompt for the fields and suggest recent IDs from your audit log.
+Interactive CLI for governance events:
 
 ```bash
 python -m llm_audit_trail_cli.main approve --interactive
@@ -77,11 +71,59 @@ python -m llm_audit_trail_cli.main attest --interactive
 ```
 
 Tips:
-- Set `AUDIT_LOG_PATH` to choose a log file.
-- Set `AUDIT_OWNER` to prefill the owner prompt.
-- The prompt suggests recent `model_id`, `dataset_id`, `deployment_id` seen in the last ~50 events.
-- JSON prompts accept inline JSON; press Enter to accept defaults.
+- `AUDIT_LOG_PATH` → choose log file.  
+- `AUDIT_OWNER` → prefill your name.  
 
+---
 
-## Dataset provenance helpers
+## Dataset provenance
+```python
+from llm_audit_trail.datasets import register_dataset
+from llm_audit_trail import AuditLogger
 
+log = AuditLogger()
+register_dataset(
+    log,
+    dataset_id="hf:stanfordnlp/imdb",
+    version="latest",
+    source="huggingface://datasets/stanfordnlp/imdb",
+    rows=50000,
+    license="unknown",
+    datasheet_url="https://huggingface.co/datasets/stanfordnlp/imdb",
+    content_hash="sha256:PLACEHOLDER",
+    preprocessing={"splits": ["train", "test"]},
+    owner="Data Eng"
+)
+```
+
+---
+
+## Examples
+Run the included example stub:
+
+```bash
+python examples/register_and_train_stub.py
+```
+
+This will:
+1. Register the IMDB dataset  
+2. Emit training + evaluation events  
+3. Record a governance approval  
+4. Verify the ledger  
+
+---
+
+## Verify integrity
+```python
+from llm_audit_trail import verify_log
+ok, report = verify_log("audit_trail.jsonl")
+print("Ledger OK:", ok)
+print(report)
+```
+
+---
+
+## Roadmap
+- More runnable examples (FastAPI demo, Hugging Face training flow)  
+- Optional sinks (e.g. W&B, S3, databases)  
+- Richer dataset provenance helpers  
