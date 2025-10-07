@@ -7,7 +7,7 @@ from llm_audit_trail.datasets import register_dataset
 from llm_audit_trail.decisions import record_approval
 
 # Load IMDB dataset from Hugging Face
-ds = load_dataset("stanfordnlp/imdb")
+ds = load_dataset("imdb")
 num_rows = sum(len(ds[split]) for split in ds)
 
 log = AuditLogger()
