@@ -4,6 +4,7 @@ import hashlib, json, os, time, uuid
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Tuple
 
+
 DEFAULT_LOG_PATH = os.environ.get("AUDIT_LOG_PATH", "audit_trail.jsonl")
 
 def _stable_json(obj: Dict[str, Any]) -> str:
