@@ -55,7 +55,9 @@ log.emit("Evaluation", {"accuracy":0.81}, model_id="demo-imdb-v1")
 ok, report = verify_log("audit_trail.jsonl")
 print("Ledger OK:", ok)
 ```
+
 You should now have a file called audit_trail.jsonl containing one JSON object per line.
+
 ---
 
 ## Hugging Face integration
