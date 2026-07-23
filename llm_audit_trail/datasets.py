@@ -1,7 +1,14 @@
+"""Dataset provenance events."""
 
 from __future__ import annotations
-from typing import Optional, Dict, Any
+
+from typing import Any, Dict, List, Optional
+
 from .core import AuditLogger
+from .registry import EventTypes
+
+__all__ = ["register_dataset", "dataset_attestation"]
+
 
 def register_dataset(
     log: AuditLogger,
@@ -10,15 +17,16 @@ def register_dataset(
     version: str,
     source: str,
     rows: int,
-    license: Optional[str],
-    datasheet_url: Optional[str],
+    license: Optional[str] = None,
+    datasheet_url: Optional[str] = None,
     content_hash: str,
-    preprocessing: Dict[str, Any],
+    preprocessing: Optional[Dict[str, Any]] = None,
     pii_residual_risk: Optional[str] = None,
     owner: Optional[str] = None,
-):
+) -> Dict[str, Any]:
+    """Record a dataset so later training and evaluation events can cite it."""
     return log.emit(
-        "DatasetRegistered",
+        EventTypes.DATASET_REGISTERED,
         details={
             "version": version,
             "source": source,
@@ -26,7 +34,7 @@ def register_dataset(
             "license": license,
             "datasheet_url": datasheet_url,
             "content_hash": content_hash,
-            "preprocessing": preprocessing,
+            "preprocessing": preprocessing or {},
             "pii_residual_risk": pii_residual_risk,
             "owner": owner,
         },
@@ -35,16 +43,18 @@ def register_dataset(
         actor=owner,
     )
 
+
 def dataset_attestation(
     log: AuditLogger,
     *,
     dataset_id: str,
     statement: str,
     owner: str,
-    references: list[str] | None = None,
-):
+    references: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Record a human statement about a dataset (provenance, consent, PII)."""
     return log.emit(
-        "DatasetAttestation",
+        EventTypes.DATASET_ATTESTATION,
         details={
             "statement": statement,
             "owner": owner,

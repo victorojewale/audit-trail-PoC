@@ -1,58 +1,90 @@
-# examples/register_and_train_stub.py
+"""End-to-end walkthrough: provenance, training, approval, verification.
 
+Runs on the core install alone — no transformers, no HF datasets, no network:
 
-from datasets import load_dataset
-from llm_audit_trail import AuditLogger, verify_log
-from llm_audit_trail.datasets import register_dataset
-from llm_audit_trail.decisions import record_approval
+    python examples/register_and_train_stub.py
 
-# Load IMDB dataset from Hugging Face
-ds = load_dataset("imdb")
-num_rows = sum(len(ds[split]) for split in ds)
+Set AUDIT_HMAC_KEY first to see the keyed variant of the chain.
+"""
 
-log = AuditLogger()
+from __future__ import annotations
 
-# 1) Register dataset
-register_dataset(
-    log,
-    dataset_id="hf:stanfordnlp/imdb",
-    version="latest",
-    source="huggingface://datasets/stanfordnlp/imdb",
-    rows=num_rows,
-    license=ds.info.license if hasattr(ds, "info") and ds.info.license else "unknown",
-    datasheet_url="https://huggingface.co/datasets/stanfordnlp/imdb",
-    content_hash="sha256:PLACEHOLDER",
-    preprocessing={"splits": list(ds.keys())},
-    owner="stanfordnlp"
+import os
+import tempfile
+
+from llm_audit_trail import (
+    AuditLogger,
+    record_approval,
+    register_dataset,
+    verify_log,
+    write_anchor,
 )
 
-# 2) Emit FineTuneStart
-log.emit(
-    "FineTuneStart",
-    details={"learning_rate":1e-5,"num_train_epochs":1,"code_commit":"abc123"},
-    model_id="demo-imdb-v1",
-    dataset_id="hf:stanfordnlp/imdb",
-    system="hf_trainer"
-)
+MODEL_ID = "demo-imdb-v1"
+DATASET_ID = "hf:stanfordnlp/imdb"
 
-# 3) Simulate evaluation
-log.emit(
-    "Evaluation",
-    details={"accuracy":0.88,"f1":0.87},
-    model_id="demo-imdb-v1",
-    dataset_id="hf:stanfordnlp/imdb",
-    system="hf_trainer"
-)
 
-# 4) Human approval
-record_approval(
-    log,
-    owner="Model Risk Committee",
-    rationale="Meets thresholds",
-    scope={"model_id":"demo-imdb-v1","dataset_id":"hf:stanfordnlp/imdb","deployment_id":"prod-1"}
-)
+def main() -> None:
+    path = os.path.join(tempfile.mkdtemp(prefix="llm-audit-"), "audit_trail.jsonl")
+    log = AuditLogger(path=path, system="demo")
 
-# 5) Verify the log
-ok, report = verify_log("audit_trail.jsonl")
-print("Ledger OK:", ok)
-print(report)
+    # 1) Where the data came from. content_hash should be a real digest of the
+    #    snapshot you trained on; a placeholder here keeps the example offline.
+    register_dataset(
+        log,
+        dataset_id=DATASET_ID,
+        version="latest",
+        source="huggingface://datasets/stanfordnlp/imdb",
+        rows=100_000,
+        license="unknown",
+        datasheet_url="https://huggingface.co/datasets/stanfordnlp/imdb",
+        content_hash="sha256:PLACEHOLDER",
+        preprocessing={"splits": ["train", "test", "unsupervised"]},
+        owner="stanfordnlp",
+    )
+
+    # 2) Training. The hf extra emits these automatically via AuditTrailCallback.
+    log.emit(
+        "FineTuneStart",
+        {"learning_rate": 1e-5, "num_train_epochs": 1, "code_commit": "abc123"},
+        model_id=MODEL_ID,
+        dataset_id=DATASET_ID,
+        system="hf_trainer",
+    )
+    log.emit(
+        "Evaluation",
+        {"accuracy": 0.88, "f1": 0.87},
+        model_id=MODEL_ID,
+        dataset_id=DATASET_ID,
+        system="hf_trainer",
+    )
+
+    # 3) A human takes responsibility for shipping it.
+    record_approval(
+        log,
+        owner="Model Risk Committee",
+        rationale="Accuracy and F1 clear the launch thresholds",
+        scope={
+            "model_id": MODEL_ID,
+            "dataset_id": DATASET_ID,
+            "deployment_id": "prod-1",
+        },
+        constraints={"rollout": "10% for 48h"},
+    )
+
+    # 4) Verify, then anchor so later truncation is detectable.
+    ok, report = verify_log(path)
+    anchor = write_anchor(path)
+
+    print(f"ledger:   {path}")
+    print(f"verified: {ok} ({report['events']} events)")
+    print(f"head:     seq {anchor['seq']} {anchor['hash'][:16]}...")
+    print(f"anchor:   {path}.anchor")
+    print(
+        "\nStore that anchor outside this machine, then re-check with:\n"
+        f"  llm-audit --log-path {path} verify --anchor {path}.anchor"
+    )
+
+
+if __name__ == "__main__":
+    main()

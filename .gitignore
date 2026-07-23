@@ -1,5 +1,20 @@
+# python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
-*.log
+venv/
+.pytest_cache/
+.mypy_cache/
 
+# build artifacts
+build/
+dist/
+*.egg-info/
+
+# audit ledgers are runtime data, not source
+*.jsonl
+*.jsonl.anchor
+
+# os / editor
+.DS_Store
+*.log
