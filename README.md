@@ -1,10 +1,5 @@
 # llm-audit-trail
 
-[![PyPI version](https://img.shields.io/pypi/v/llm-audit-trail.svg)](https://pypi.org/project/llm-audit-trail/)
-[![Python versions](https://img.shields.io/pypi/pyversions/llm-audit-trail.svg)](https://pypi.org/project/llm-audit-trail/)
-[![License](https://img.shields.io/pypi/l/llm-audit-trail.svg)](https://github.com/victorojewale/audit-trail-PoC/blob/main/LICENSE)
-[![CI](https://github.com/victorojewale/audit-trail-PoC/actions/workflows/ci.yml/badge.svg)](https://github.com/victorojewale/audit-trail-PoC/actions/workflows/ci.yml)
-
 **Tamper-evident audit trails for the LLM lifecycle — training, approval, deployment, and serving.**
 
 `llm-audit-trail` records what happened to a model as an append-only, hash-chained event log: which dataset trained it, how it scored, who approved its release and on what grounds, and what it served in production. Each event is cryptographically linked to the one before it, so an edit, deletion, or reordering after the fact is detectable rather than invisible.
@@ -25,8 +20,10 @@ It exists because *"we have logs"* and *"we can show our logs weren't altered"* 
 
 ## Install
 
+From the root of this repository:
+
 ```bash
-pip install llm-audit-trail
+pip install .
 ```
 
 Requires Python 3.9+.
@@ -74,14 +71,14 @@ The ledger may grow past the anchor; it may not lose it.
 
 ## Integrations
 
-**Hugging Face** (`pip install 'llm-audit-trail[hf]'`) — emits `FineTuneStart`, `EpochEnd`, `Evaluation`, `Checkpoint`, `FineTuneEnd`. Numpy metrics are normalised automatically.
+**Hugging Face** (`pip install '.[hf]'`) — emits `FineTuneStart`, `EpochEnd`, `Evaluation`, `Checkpoint`, `FineTuneEnd`. Numpy metrics are normalised automatically.
 
 ```python
 from llm_audit_trail import hf_audit_callback
 trainer = Trainer(..., callbacks=[hf_audit_callback(model_id="demo-imdb-v1")])
 ```
 
-**FastAPI** (`pip install 'llm-audit-trail[fastapi]'`) — logs request/response metadata, correlated by `request_id`. Ledger writes run off the event loop.
+**FastAPI** (`pip install '.[fastapi]'`) — logs request/response metadata, correlated by `request_id`. Ledger writes run off the event loop.
 
 ```python
 from llm_audit_trail import AuditLogger, AuditMiddleware
@@ -157,17 +154,17 @@ Environment: `AUDIT_LOG_PATH`, `AUDIT_OWNER`, `AUDIT_HMAC_KEY`. Config layers fr
 jq 'select(.model_id=="demo-imdb-v1")' audit_trail.jsonl
 ```
 
-## Contributing
+## Development
+
+From the root of this repository:
 
 ```bash
-git clone https://github.com/victorojewale/audit-trail-PoC.git
-cd audit-trail-PoC
 pip install -e '.[dev]'
 pytest
 ```
 
-Run `python examples/register_and_train_stub.py` for an offline end-to-end walkthrough. Issues and pull requests are welcome at [audit-trail-PoC](https://github.com/victorojewale/audit-trail-PoC).
+Run `python examples/register_and_train_stub.py` for an offline end-to-end walkthrough.
 
 ## License
 
-[Apache-2.0](https://github.com/victorojewale/audit-trail-PoC/blob/main/LICENSE)
+Apache-2.0 — see [LICENSE](LICENSE).

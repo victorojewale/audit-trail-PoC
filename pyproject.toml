@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Victor Ojewale", email = "victor_ojewale@brown.edu" }]
+authors = [{ name = "Anonymous" }]
 keywords = ["audit", "provenance", "governance", "compliance", "llm", "mlops"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -36,11 +36,6 @@ dev = ["pytest>=7.0", "fastapi>=0.100", "httpx>=0.24", "build>=1.0", "twine>=5.0
 
 [project.scripts]
 llm-audit = "llm_audit_trail_cli.main:main"
-
-[project.urls]
-Homepage = "https://github.com/victorojewale/audit-trail-PoC"
-Source = "https://github.com/victorojewale/audit-trail-PoC"
-Issues = "https://github.com/victorojewale/audit-trail-PoC/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "llm_audit_trail.__version__" }
